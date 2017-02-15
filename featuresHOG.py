@@ -74,7 +74,7 @@ def findHOGFeatures(img, n_divs=5, n_bins=4):
 
 def getHOG(img):
 	image = Image(img, cv2image=True)		# convert it to SimpleCV image
-	HOG = findHOGFeatures(image, 2, 4)
+	HOG = findHOGFeatures(image, 2, 16)
 	Fnames = ["HOG"+str(i).zfill(2) for i in range(len(HOG))]
 	HOG = normalize(HOG)
 	if type(HOG) is list:

@@ -157,7 +157,7 @@ def trainSVM(features, Cparam):
         See MLPY documentation for more details (http://mlpy.sourceforge.net/docs/3.4/svm.html)
     '''
     [X, Y] = listOfFeatures2Matrix(features)    
-    svm = sklearn.svm.SVC(C = Cparam, kernel = 'linear',  probability = True)        
+    svm = sklearn.svm.SVC(C = Cparam, kernel = 'rbf',  probability = True)        
     svm.fit(X,Y)
 
     return svm

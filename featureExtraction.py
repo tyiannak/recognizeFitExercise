@@ -25,31 +25,37 @@ def resizeFrame(frame, targetWidth):
 
 def blockshaped(arr):
     blocks = []    
-    blocks.append(arr[0:arr.shape[0]/2,  0:arr.shape[1]/2])
-    blocks.append(arr[0:arr.shape[0]/2,  arr.shape[1]/2:])
-    blocks.append(arr[arr.shape[0]/2:, 0:arr.shape[1]/2])
-    blocks.append(arr[arr.shape[0]/2:, arr.shape[1]/2:])
+    nBlocks = 2
+    for i in range(nBlocks):
+        for j in range(nBlocks):
+            #print i*arr.shape[0]/nBlocks,(i+1)*arr.shape[0]/nBlocks, j*arr.shape[1]/nBlocks,(j+1)*arr.shape[1]/nBlocks
+            blocks.append(arr[i*arr.shape[0]/nBlocks:(i+1)*arr.shape[0]/nBlocks,  j*arr.shape[1]/nBlocks:(j+1)*arr.shape[1]/nBlocks])
+
+    #blocks.append(arr[0:arr.shape[0]/3,  arr.shape[1]/3:arr.shape[1]/3])    
+    #blocks.append(arr[0:arr.shape[0]/2,  arr.shape[1]/2:])
+    #blocks.append(arr[arr.shape[0]/2:, 0:arr.shape[1]/2])
+    #blocks.append(arr[arr.shape[0]/2:, arr.shape[1]/2:])
     return blocks
 
 def featureExtraction(img, PLOT = False):
     start = time.clock()
-            
+    fv = []
+    fNames = []
     blocks = blockshaped(img)
-    [fLBP1, namesLBP] = featuresLBP2.getLBP(blocks[0]);            
-    [fLBP2, namesLBP] = featuresLBP2.getLBP(blocks[1]);            
-    [fLBP3, namesLBP] = featuresLBP2.getLBP(blocks[2]);            
-    [fLBP4, namesLBP] = featuresLBP2.getLBP(blocks[3]);                
-    [fColor1, namesColor] = featuresColor.getRGBS(blocks[0], PLOT);    
-    [fColor2, namesColor] = featuresColor.getRGBS(blocks[1], PLOT);    
-    [fColor3, namesColor] = featuresColor.getRGBS(blocks[2], PLOT);    
-    [fColor4, namesColor] = featuresColor.getRGBS(blocks[3], PLOT);        
-    [fHOG1, namesHOG] = featuresHOG.getHOG(blocks[0]);            
-    [fHOG2, namesHOG] = featuresHOG.getHOG(blocks[1]);            
-    [fHOG3, namesHOG] = featuresHOG.getHOG(blocks[2]);            
-    [fHOG4, namesHOG] = featuresHOG.getHOG(blocks[3]);            
-
-    fv = fLBP1 + fLBP2 + fLBP3 + fLBP4 + fColor1 + fColor2  + fColor3 + fColor4  + fHOG1 + fHOG2 + fHOG3 + fHOG4
-    fNames = namesLBP + namesLBP + namesLBP + namesLBP + namesColor + namesColor + namesColor + namesColor + namesHOG + namesHOG + namesHOG + namesHOG 
+    for i in range(len(blocks)):
+        [ft, names] = featuresLBP2.getLBP(blocks[i])
+        fv += ft
+        fNames += names
+    for i in range(len(blocks)):
+        [ft, names] = featuresColor.getRGBS(blocks[i])
+        fv += ft
+        fNames += names
+    for i in range(len(blocks)):
+        [ft, names] = featuresHOG.getHOG(blocks[i])
+        fv += ft
+        fNames += names
+    #fv = fLBP1 + fLBP2 + fLBP3 + fLBP4 + fColor1 + fColor2  + fColor3 + fColor4  + fHOG1 + fHOG2 + fHOG3 + fHOG4
+    #fNames = namesLBP + namesLBP + namesLBP + namesLBP + namesColor + namesColor + namesColor + namesColor + namesHOG + namesHOG + namesHOG + namesHOG 
 
     return fv, fNames
 

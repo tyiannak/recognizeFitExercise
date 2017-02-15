@@ -14,7 +14,7 @@ def getRGBS(img, PLOT = False):
 	features = []
 	featuresSobel = []
 	Grayscale = cv2.cvtColor(img, cv2.cv.CV_BGR2GRAY)
-	histG = cv2.calcHist([Grayscale], [0], None, [8], [0, 256])
+	histG = cv2.calcHist([Grayscale], [0], None, [16], [0, 256])
 	histG = histG / histG.sum()
 	features.extend(histG[:,0].tolist())
 
@@ -24,7 +24,7 @@ def getRGBS(img, PLOT = False):
 	abs_grad_x = cv2.convertScaleAbs(grad_x)
 	abs_grad_y = cv2.convertScaleAbs(grad_y)
 	dst = cv2.addWeighted(abs_grad_x,0.5,abs_grad_y,0.5,0)
-	histSobel = cv2.calcHist([dst], [0], None, [8], [0, 256])
+	histSobel = cv2.calcHist([dst], [0], None, [16], [0, 256])
 	histSobel = histSobel / histSobel.sum()
 	features.extend(histSobel[:,0].tolist())
 

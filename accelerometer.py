@@ -20,6 +20,8 @@ import sklearn.svm
 import sklearn.decomposition
 import sklearn.ensemble
 import featureExtraction as iFE
+import cPickle
+
 
 eps = 0.00000001
 
@@ -36,7 +38,7 @@ def mtFeatureExtraction(signal, Fs, mtWin, mtStep, stWin, stStep):
 
     stFeatures = stFeatureExtraction2(signal, Fs, stWin, stStep)
     numOfFeatures = len(stFeatures)
-    numOfStatistics = 4
+    numOfStatistics = 6
 
     mtFeatures = []
     #for i in range(numOfStatistics * numOfFeatures + 1):
@@ -57,7 +59,26 @@ def mtFeatureExtraction(signal, Fs, mtWin, mtStep, stWin, stStep):
             mtFeatures[i+numOfFeatures].append(numpy.std(curStFeatures))
             mtFeatures[i+2*numOfFeatures].append(numpy.max(curStFeatures))
             mtFeatures[i+3*numOfFeatures].append(numpy.min(curStFeatures))
-            #mtFeatures[i+2*numOfFeatures].append(numpy.std(curStFeatures) / (numpy.mean(curStFeatures)+0.00000010))
+            lower = numpy.sort(curStFeatures)[0:int(curStFeatures.shape[0]/3)]
+            upper = numpy.sort(curStFeatures)[-int(curStFeatures.shape[0]/3)::]
+            if lower.shape[0]>0:
+                mtFeatures[i+4*numOfFeatures].append(numpy.mean(lower))
+            else:
+                mtFeatures[i+4*numOfFeatures].append(numpy.mean(curStFeatures))
+            if upper.shape[0]>0:
+                mtFeatures[i+5*numOfFeatures].append(numpy.mean(upper))
+            else:
+                mtFeatures[i+5*numOfFeatures].append(numpy.mean(curStFeatures))
+            '''                
+            if lower.shape[0]>0:
+                mtFeatures[i+6*numOfFeatures].append(numpy.mean(lower))
+            else:
+                mtFeatures[i+6*numOfFeatures].append(numpy.mean(curStFeatures))
+            if upper.shape[0]>0:
+                mtFeatures[i+7*numOfFeatures].append(numpy.mean(upper))
+            else:
+                mtFeatures[i+7*numOfFeatures].append(numpy.mean(curStFeatures))
+            '''
             curPos += mtStepRatio
 
     return numpy.array(mtFeatures), stFeatures
@@ -255,7 +276,7 @@ def stFeatureExtraction2(signal, Fs, Win, Step):
     nFFT = Win / 2
     
     #numOfTimeSpectralFeatures = 16
-    numOfTimeSpectralFeatures = 14
+    numOfTimeSpectralFeatures = 14*2
     totalNumOfFeatures = numOfTimeSpectralFeatures 
 
     stFeatures = []
@@ -280,17 +301,17 @@ def stFeatureExtraction2(signal, Fs, Win, Step):
         curFV[5] = numpy.min(x)
         curFV[6] = numpy.max(numpy.abs(x))
         curFV[7] = numpy.min(numpy.abs(x))
-        curFV[8] = stEnergyEntropy(x)                    # short-term entropy of energy
-        # TODO: TEST DELTA
-        #if countFrames>1:
-        #    curFV[8::] = curFV[0:8] - prevFV[0:8]
-        #else:
-        #    curFV[8::] = curFV[0:8]
-        
+        curFV[8] = stEnergyEntropy(x)                    # short-term entropy of energy        
         [curFV[9], curFV[10]] = stSpectralCentroidAndSpread(X, Fs)    # spectral centroid and spread        
         curFV[11] = stSpectralEntropy(X)                  # spectral entropy
         curFV[12] = stSpectralFlux(X, Xprev)              # spectral flux
         curFV[13] = stSpectralRollOff(X, 0.90, Fs)        # spectral rolloff
+        # TODO: TEST DELTA
+        if countFrames>1:
+            curFV[numOfTimeSpectralFeatures/2::] = curFV[0:numOfTimeSpectralFeatures/2] - prevFV[0:numOfTimeSpectralFeatures/2]
+        else:
+            curFV[numOfTimeSpectralFeatures/2::] = curFV[0:numOfTimeSpectralFeatures/2]
+
         stFeatures.append(curFV)
         prevFV = curFV.copy()
         Xprev = X.copy()
@@ -348,8 +369,6 @@ def processAccelerometer(X, Y, Z, duration):
     Allfft = Allfft / len(Allfft)
     eAll = getNumOfRepetitions(Allfft, duration)      
 
-    print eAll
-
     '''
     plt.subplot(2,1,1)
     plt.plot(X)
@@ -363,6 +382,128 @@ def processAccelerometer(X, Y, Z, duration):
 
     return eX, eY, eZ
 
+def featureExtraction(csvFile, useAccelerometer, useAccelerometerOnlyX, useAccelerometerOnlyY, useAccelerometerOnlyZ, useImage):
+    if useAccelerometer:
+        ''' Analyze accelermoterer data '''    
+        Xs, Ys, Zs, duration = readCSVFileAccelerometer(csvFile)
+        Fs = round(len(Xs) / float(duration))            
+        mtWin = 5.0
+        mtStep = 1.0
+        stWin = 0.5
+        stStep = 0.5
+        [MidTermFeatures, stFeatures] = mtFeatureExtraction(Xs, Fs, round(mtWin * Fs), round(mtStep * Fs), round(Fs * stWin), round(Fs * stStep))
+        Fx = MidTermFeatures.mean(axis = 1)            
+        [MidTermFeatures, stFeatures] = mtFeatureExtraction(Ys, Fs, round(mtWin * Fs), round(mtStep * Fs), round(Fs * stWin), round(Fs * stStep))
+        Fy = MidTermFeatures.mean(axis = 1)            
+        [MidTermFeatures, stFeatures] = mtFeatureExtraction(Zs, Fs, round(mtWin * Fs), round(mtStep * Fs), round(Fs * stWin), round(Fs * stStep))
+        Fz = MidTermFeatures.mean(axis = 1)            
+
+        ''' Fused features '''                                
+        FeatureVectorFusion = numpy.concatenate([Fx, Fy, Fz])            
+
+        if useAccelerometerOnlyX:
+            FeatureVectorFusion = Fx.copy()
+        if useAccelerometerOnlyY:
+            FeatureVectorFusion = Fy.copy()
+        if useAccelerometerOnlyZ:
+            FeatureVectorFusion = Fz.copy()                             
+
+
+        ''' get number of repetitions from accelerometer '''            
+        #x, y, z = processAccelerometer(Xs, Ys, Zs, duration)
+        #eX.append(x)
+        #eY.append(y)
+        #eZ.append(z)
+    else:
+        FeatureVectorFusion = numpy.array([])
+
+    ''' Image Features '''
+    if useImage:
+        fileNameImg = csvFile.replace(".csv",".png")
+        imF, imFnames = iFE.getFeaturesFromFile(fileNameImg)
+        imF = numpy.array(imF)                
+        #imF = numpy.dot(imF, rw)
+        FeatureVectorFusion = numpy.concatenate([FeatureVectorFusion, imF])
+        FeatureVectorFusion += numpy.random.rand(FeatureVectorFusion.shape[0]) * 0.000000000010                        
+    return FeatureVectorFusion
+
+def classifyDir(argv):
+    dirName = argv[2]
+    modelName = argv[3]
+    useAccelerometer = ((argv[4]=="1") or (argv[4]=="2") or (argv[4]=="3")  or (argv[4]=="4"))
+    useAccelerometerOnlyX = (argv[4]=="1")
+    useAccelerometerOnlyY = (argv[4]=="2")
+    useAccelerometerOnlyZ = (argv[4]=="3")
+    useImage = (argv[5]=="1")    
+    fileList  = sorted(glob.glob(os.path.join(dirName, "*.csv")))        
+
+    try:
+        fo = open(modelName+"MEANS", "rb")
+    except IOError:
+            print "Load SVM Model: Didn't find file"
+            return
+    try:
+        MEAN = cPickle.load(fo)
+        STD = cPickle.load(fo)
+        classNames = cPickle.load(fo)        
+    except:
+        fo.close()
+    fo.close()
+
+    CM = numpy.zeros((len(classNames),len(classNames)))
+
+    for i, m in enumerate(fileList):                
+        gt = int(m.split("_")[-1].replace(".csv",""))
+        className = m.split("_")[1]        
+        result = classifySingleFile(m, modelName, useAccelerometer, useAccelerometerOnlyX, useAccelerometerOnlyY, useAccelerometerOnlyZ, useImage)
+        print className, result
+        CM[classNames.index(className), classNames.index(result)] += 1
+
+
+    CM = CM
+    Rec = numpy.zeros((CM.shape[0], ))
+    Pre = numpy.zeros((CM.shape[0], ))
+
+    for ci in range(CM.shape[0]):
+        Rec[ci] = CM[ci, ci] / numpy.sum(CM[ci, :])
+        Pre[ci] = CM[ci, ci] / numpy.sum(CM[:, ci])
+    F1 = 2 * Rec * Pre / (Rec + Pre)
+    print CM
+    print numpy.mean(F1)
+    numpy.save(modelName + "_results.npy", CM)
+
+
+
+
+def classifySingleFile(fileName, modelName, useAccelerometer, useAccelerometerOnlyX, useAccelerometerOnlyY, useAccelerometerOnlyZ, useImage):
+
+    fV = featureExtraction(fileName, useAccelerometer, useAccelerometerOnlyX, useAccelerometerOnlyY, useAccelerometerOnlyZ, useImage)        
+
+    try:
+        fo = open(modelName+"MEANS", "rb")
+    except IOError:
+            print "Load SVM Model: Didn't find file"
+            return
+    try:
+        MEAN = cPickle.load(fo)
+        STD = cPickle.load(fo)
+        classNames = cPickle.load(fo)        
+    except:
+        fo.close()
+    fo.close()
+
+    MEAN = numpy.array(MEAN)
+    STD = numpy.array(STD)    
+    fV = (fV - MEAN) / STD
+
+    COEFF = []
+    with open(modelName, 'rb') as fid:
+        SVM = cPickle.load(fid)    
+    [Result, P] = aT.classifierWrapper(SVM, "svm", fV)    # classification            
+    return classNames[int(Result)]
+
+
+
 
 def evaluateClassifier(argv):
     dirName = argv[2]    
@@ -371,11 +512,6 @@ def evaluateClassifier(argv):
     useAccelerometerOnlyY = (argv[3]=="2")
     useAccelerometerOnlyZ = (argv[3]=="3")
 
-    print useAccelerometerOnlyX
-    print useAccelerometerOnlyY
-    print useAccelerometerOnlyZ
-    print useAccelerometer
-
     useImage = (argv[4]=="1")    
     fileList  = sorted(glob.glob(os.path.join(dirName, "*.csv")))    
     GTs = []
@@ -383,11 +519,9 @@ def evaluateClassifier(argv):
     eY = []    
     eZ = [] 
 
-    featuresX = []
-    featuresY = []
-    featuresZ = []
     featuresAll = []
     classNames = []
+    
 
     for i, m in enumerate(fileList):                
         gt = int(m.split("_")[-1].replace(".csv",""))
@@ -395,84 +529,35 @@ def evaluateClassifier(argv):
         className = m.split("_")[1]        
         if not className in classNames:
             classNames.append(className)
-            featuresX.append([])        
-            featuresY.append([]) 
-            featuresZ.append([]) 
             featuresAll.append([])         
         #if gt>0:
         if True:
             GTs.append(gt)
-
-            if useAccelerometer:
-                ''' Analyze accelermoterer data '''
-                Xs, Ys, Zs, duration = readCSVFileAccelerometer(m)
-                Fs = round(len(Xs) / float(duration))            
-                mtWin = 5.0
-                mtStep = 1.0
-                stWin = 0.5
-                stStep = 0.5
-                [MidTermFeatures, stFeatures] = mtFeatureExtraction(Xs, Fs, round(mtWin * Fs), round(mtStep * Fs), round(Fs * stWin), round(Fs * stStep))
-                Fx = MidTermFeatures.mean(axis = 1)            
-                [MidTermFeatures, stFeatures] = mtFeatureExtraction(Ys, Fs, round(mtWin * Fs), round(mtStep * Fs), round(Fs * stWin), round(Fs * stStep))
-                Fy = MidTermFeatures.mean(axis = 1)            
-                [MidTermFeatures, stFeatures] = mtFeatureExtraction(Zs, Fs, round(mtWin * Fs), round(mtStep * Fs), round(Fs * stWin), round(Fs * stStep))
-                Fz = MidTermFeatures.mean(axis = 1)            
-
-                if len(featuresX[classNames.index(className)])==0:
-                    featuresX[classNames.index(className)] = Fx
-                else:
-                    featuresX[classNames.index(className)] = numpy.vstack((featuresX[classNames.index(className)], Fx))                                        
-
-                if len(featuresY[classNames.index(className)])==0:
-                    featuresY[classNames.index(className)] = Fy
-                else:
-                    featuresY[classNames.index(className)] = numpy.vstack((featuresY[classNames.index(className)], Fy))                                        
-
-                if len(featuresZ[classNames.index(className)])==0:
-                    featuresZ[classNames.index(className)] = Fz
-                else:
-                    featuresZ[classNames.index(className)] = numpy.vstack((featuresZ[classNames.index(className)], Fz))                                                    
-
-                ''' Fused features '''                                
-                FeatureVectorFusion = numpy.concatenate([Fx, Fy, Fz])            
-
-                if useAccelerometerOnlyX:
-                    FeatureVectorFusion = Fx.copy()
-                if useAccelerometerOnlyY:
-                    FeatureVectorFusion = Fy.copy()
-                if useAccelerometerOnlyZ:
-                    FeatureVectorFusion = Fz.copy()
-
-
-                ''' get number of repetitions from accelerometer '''            
-                x, y, z = processAccelerometer(Xs, Ys, Zs, duration)
-                eX.append(x)
-                eY.append(y)
-                eZ.append(z)
-            else:
-                FeatureVectorFusion = numpy.array([])
-
-            ''' Image Features '''
-            if useImage:
-                fileNameImg = m.replace(".csv",".png")
-                imF, imFnames = iFE.getFeaturesFromFile(fileNameImg)
-                imF = numpy.array(imF)
-                FeatureVectorFusion = numpy.concatenate([FeatureVectorFusion, imF])
-                FeatureVectorFusion += numpy.random.rand(FeatureVectorFusion.shape[0]) * 0.000000000010                        
-
-
+            FeatureVectorFusion = featureExtraction(m, useAccelerometer, useAccelerometerOnlyX, useAccelerometerOnlyY, useAccelerometerOnlyZ, useImage)
+            print FeatureVectorFusion.shape
             if len(featuresAll[classNames.index(className)])==0:
                 featuresAll[classNames.index(className)] = FeatureVectorFusion
             else:
                 featuresAll[classNames.index(className)] = numpy.vstack((featuresAll[classNames.index(className)], FeatureVectorFusion))
-            print featuresAll[-1].shape
-
-
-
 
     #featuresAll = featuresY
     (featuresAll, MEAN, STD) = aT.normalizeFeatures(featuresAll)
-    aT.evaluateClassifier(featuresAll, classNames, 1000, "svm", [0.05, 0.1, 0.5, 1, 2,3, 5, 10, 15, 20, 25, 50, 100, 200], 0, perTrain=0.80)
+    bestParam = aT.evaluateClassifier(featuresAll, classNames, 1000, "svm", [0.05, 0.1, 0.5, 1, 2,3, 5, 10, 15, 20, 25, 50, 100, 200], 0, perTrain=0.80)
+
+    MEAN = MEAN.tolist()
+    STD = STD.tolist()    
+
+    # STEP C: Save the classifier to file    
+    Classifier = aT.trainSVM(featuresAll, bestParam)
+    modelName = argv[5]
+    with open(modelName, 'wb') as fid:                                            # save to file
+        cPickle.dump(Classifier, fid)            
+    fo = open(modelName + "MEANS", "wb")
+    cPickle.dump(MEAN, fo, protocol=cPickle.HIGHEST_PROTOCOL)
+    cPickle.dump(STD, fo, protocol=cPickle.HIGHEST_PROTOCOL)
+    cPickle.dump(classNames, fo, protocol=cPickle.HIGHEST_PROTOCOL)
+    fo.close()
+
 
 
     '''
@@ -533,4 +618,17 @@ if __name__ == '__main__':
         evaluateClassifier(sys.argv)
     elif sys.argv[1] == "showFileAccelerometer":
         showFileAccelerometer(sys.argv)
+    elif sys.argv[1] == "classifyFile":
+        argv = sys.argv
+        fileName = argv[2]
+        modelName = argv[3]
+        useAccelerometer = ((argv[4]=="1") or (argv[4]=="2") or (argv[4]=="3")  or (argv[4]=="4"))
+        useAccelerometerOnlyX = (argv[4]=="1")
+        useAccelerometerOnlyY = (argv[4]=="2")
+        useAccelerometerOnlyZ = (argv[4]=="3")
+        useImage = (argv[5]=="1")    
+
+        print classifySingleFile(fileName, modelName, useAccelerometer, useAccelerometerOnlyX, useAccelerometerOnlyY, useAccelerometerOnlyZ, useImage)
+    elif sys.argv[1] == "classifyDirAndEvaluate":
+        classifyDir(sys.argv)
 
