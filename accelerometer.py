@@ -2,6 +2,7 @@ from pyAudioAnalysis import audioFeatureExtraction as aF
 from pyAudioAnalysis import audioTrainTest as aT
 import cv2, time, sys, glob, os, csv
 import matplotlib
+import ntpath
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import numpy
@@ -453,14 +454,15 @@ def classifyDir(argv):
     CM = numpy.zeros((len(classNames),len(classNames)))
 
     for i, m in enumerate(fileList):                
-        gt = int(m.split("_")[-1].replace(".csv",""))
-        className = m.split("_")[1]        
+        gt = int(ntpath.basename(m).split("_")[-1].replace(".csv",""))
+        className = ntpath.basename(m).split("_")[1]        
         result = classifySingleFile(m, modelName, useAccelerometer, useAccelerometerOnlyX, useAccelerometerOnlyY, useAccelerometerOnlyZ, useImage)
         print className, result
         CM[classNames.index(className), classNames.index(result)] += 1
 
 
-    CM = CM
+    CM = CM + 0.0000000010
+
     Rec = numpy.zeros((CM.shape[0], ))
     Pre = numpy.zeros((CM.shape[0], ))
 
@@ -524,9 +526,9 @@ def evaluateClassifier(argv):
     
 
     for i, m in enumerate(fileList):                
-        gt = int(m.split("_")[-1].replace(".csv",""))
+        gt = int(ntpath.basename(m).split("_")[-1].replace(".csv",""))
 
-        className = m.split("_")[1]        
+        className = ntpath.basename(m).split("_")[1]        
         if not className in classNames:
             classNames.append(className)
             featuresAll.append([])         
