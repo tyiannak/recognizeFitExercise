@@ -14,7 +14,8 @@ from scipy.fftpack import rfft
 from scipy.fftpack import fft
 from scipy.fftpack.realtransforms import dct
 from scipy.signal import fftconvolve
-
+import scipy.misc
+import csv,math
 
 # process and plot related parameters:
 newWidth = 640; processStep = 0.1; plotStep = 1;
@@ -44,6 +45,12 @@ def resizeFrame(frame, targetWidth):
 
     return frameFinal
     
+def median(lst):
+    return numpy.median(numpy.array(lst))
+
+def mean(weights,lst):
+    #return numpy.mean(numpy.array(weights)*numpy.array(lst))
+    return float(numpy.sum(numpy.array(weights)*numpy.array(lst)))/float(numpy.sum(numpy.array(weights)))
 
 def processMovie(moviePath, processMode, PLOT):
     Tstart = time.time(); T0 = Tstart;
@@ -119,14 +126,17 @@ def processMovie(moviePath, processMode, PLOT):
                     WidthPlot = 150;
                     WidthPlot2 = 150;            # used for static plot (e.g. 1D histogram)
                     cv2.imshow('Color', vis)
-                    cv2.imshow('GrayNorm', Grayscale/256.0)
-                    FrameDiff_Gray =  numpy.abs(GrayscalePrev.astype("float") - Grayscale.astype("float")) / 256.0                    
+                    cv2.imshow('GrayNorm', Grayscale/256.0)                    
+                    Grayscale = cv2.medianBlur(Grayscale, 3)                    
+                    Grayscale = cv2.medianBlur(Grayscale, 5)                    
+                    FrameDiff_Gray =  numpy.abs(GrayscalePrev.astype("float") - Grayscale.astype("float")) / 256.0
 
                     if countDiffs == 0:
                         FrameDiff_GrayAggregate = FrameDiff_Gray
                     else:
                         FrameDiff_Grayt = FrameDiff_Gray
-                        FrameDiff_Grayt[FrameDiff_Grayt < FrameDiff_Grayt.mean()*5] = 0.0
+                        FrameDiff_Grayt[FrameDiff_Grayt < 0.05] = 0.0
+                        FrameDiff_Grayt[FrameDiff_Grayt > 0.1] = 1.0
                         FrameDiff_GrayAggregate += FrameDiff_Grayt
                     #FrameDiff_GrayAggregate /= float(countDiffs+1)                    
                     #print FrameDiff_GrayAggregate
@@ -157,6 +167,13 @@ def processMovie(moviePath, processMode, PLOT):
         else:
             break;
     
+    #FrameDiff_GrayAggregate = cv2.cv.fromarray(FrameDiff_GrayAggregate)
+    FrameDiff_GrayAggregate /= FrameDiff_GrayAggregate.max()
+    FrameDiff_GrayAggregate *= 256;
+    FrameDiff_GrayAggregate = cv2.medianBlur(FrameDiff_GrayAggregate.astype('uint8'), 3)
+    FrameDiff_GrayAggregate = cv2.medianBlur(FrameDiff_GrayAggregate.astype('uint8'), 5)    
+    FrameDiff_GrayAggregate[FrameDiff_GrayAggregate < 30] = 0.0
+
 
     processingTime = time.time() - Tstart
     processingFPS = countProcess / float(processingTime); 
@@ -166,12 +183,24 @@ def processMovie(moviePath, processMode, PLOT):
 
 
     FrameValue_Diffs_Grayscale = numpy.array(FrameValue_Diffs_Grayscale)
-    FrameValue_Diffs_Grayscale = FrameValue_Diffs_Grayscale.sum(axis=0)
-    nFFT = FrameValue_Diffs_Grayscale.shape[0]/2    
-    Xfft = abs(fft(FrameValue_Diffs_Grayscale))     
-    Xfft = Xfft[0:nFFT]
-    Xfft = Xfft / len(Xfft)
-    estimatedRepetitions = getNumOfRepetitions(Xfft, duration)      
+   #FrameValue_Diffs_Grayscale = FrameValue_Diffs_Grayscale.sum(axis=0)
+    BlockBasedRepetitions = []
+    maxFreqs = []
+    for line in range(0,FrameValue_Diffs_Grayscale.shape[0]):
+        temp = FrameValue_Diffs_Grayscale[line,:]
+        nFFT = temp.shape[0]/2    
+        '''TODO'''
+        Xfft = abs(fft(temp))     
+        Xfft = Xfft[0:nFFT]
+        Xfft = Xfft / len(Xfft)
+        max_temp,rep_temp = getNumOfRepetitions(Xfft, duration)
+        maxFreqs.append(max_temp)
+        BlockBasedRepetitions.append(rep_temp)
+    print BlockBasedRepetitions    
+    #estimatedRepetitions = math.floor(median(BlockBasedRepetitions))
+    estimatedRepetitions = math.floor(mean(maxFreqs,BlockBasedRepetitions))
+
+       # print estimatedRepetitions  
     #plt.subplot(3,1,1)
     #plt.plot(FrameValue_Diffs_Grayscale)    
     #plt.subplot(3,1,2)
@@ -194,6 +223,8 @@ def processMovie(moviePath, processMode, PLOT):
     
     
     #return F, FeatureMatrix
+    print moviePath
+    scipy.misc.imsave(moviePath.replace("mpeg", "png"), FrameDiff_GrayAggregate)
     return estimatedRepetitions
 
 def blockshaped(arr, nrows, ncols):
@@ -218,7 +249,7 @@ def getNumOfRepetitions(fftSeq, duration):
     iMax = numpy.argmax(fftSeq)              
     maxFreq = (Fs/2)*fi[iMax] / float(nFFT)        
     maxT = 1 / maxFreq
-    return round(duration / (2*maxT))
+    return maxFreq , round(duration / (2*maxT))
 
 def dirProcessMovie(dirName):
     """
@@ -235,6 +266,9 @@ def dirProcessMovie(dirName):
     
     for movieFile in movieFilesList:            
         repetitions = processMovie(movieFile, 2, 1)
+        with open("repetitions_Wmean.csv", "a") as fp:
+            wr = csv.writer(fp, dialect='excel')
+            wr.writerow([movieFile.split('/')[1].split('.')[0],movieFile.split('/')[1].split('.')[0].split('_')[-1],repetitions])
     # TODO:
     # 1. save FrameDiff_GrayAggregate in a png file to be used for classification of the whole video (before processMovie() returns)
     # 2. save estimatedRepetitions in a csv file when runnign in a batch mode (see line 242)

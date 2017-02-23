@@ -544,7 +544,8 @@ def evaluateClassifier(argv):
 
     #featuresAll = featuresY
     (featuresAll, MEAN, STD) = aT.normalizeFeatures(featuresAll)
-    bestParam = aT.evaluateClassifier(featuresAll, classNames, 1000, "svm", [0.05, 0.1, 0.5, 1, 2,3, 5, 10, 15, 20, 25, 50, 100, 200], 0, perTrain=0.80)
+    #bestParam = aT.evaluateClassifier(featuresAll, classNames, 1000, "svm", [0.05, 0.1, 0.5, 1, 2,3, 5, 10, 15, 20, 25, 50, 100, 200], 0, perTrain=0.80)
+    bestParam = aT.evaluateClassifier(featuresAll, classNames, 1000, "svm", [0.05, 0.1, 0.5], 0, perTrain=0.80)    
 
     MEAN = MEAN.tolist()
     STD = STD.tolist()    
